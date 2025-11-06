@@ -3,24 +3,25 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import LoginScreen from './src/screens/LoginScreen';
-import MapScreen from './src/screens/MapsScreen'; // 👈 asegúrate de importar el mapa
+import MapsScreen from './src/screens/MapsScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
 
-const Stack = createNativeStackNavigator();
+type RootStackParamList = {
+  login: undefined;
+  maps: undefined;
+  register: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
-        <Stack.Screen
-          name="Login"
-          component={LoginScreen}
-          options={{ headerShown: false }} // 👈 sin barra superior
-        />
-        <Stack.Screen
-          name="Map"
-          component={MapScreen}
-          options={{ title: 'Mapa' }} // puedes ocultar o cambiar el título
-        />
+      <Stack.Navigator initialRouteName="login" screenOptions={{ headerShown: false }}>
+        {/* ✅ Correcto: cada pantalla se declara con Stack.Screen */}
+        <Stack.Screen name="login" component={LoginScreen} />
+        <Stack.Screen name="maps" component={MapsScreen} />
+        <Stack.Screen name="register" component={RegisterScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

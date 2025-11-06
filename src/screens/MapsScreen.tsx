@@ -1,129 +1,166 @@
-// screens/MapScreen.tsx
-import React, { useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, MapPressEvent } from 'react-native-maps';
+// src/screens/MapsScreen.tsx
+import React, { useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, Pressable, Text, Platform, Alert } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { indriveMapStyle } from '../styles/mapStyle';
+import { openSettings, PERMISSIONS, request, RESULTS } from 'react-native-permissions';
+import Geolocation, { GeoPosition } from 'react-native-geolocation-service';
 
-export default function MapsScreen() {
+type RootStackParamList = { login: undefined; maps: undefined };
+type MapsNav = NativeStackNavigationProp<RootStackParamList, 'maps'>;
+type Props = { navigation: MapsNav };
+
+export default function MapsScreen({ navigation }: Props) {
   const mapRef = useRef<MapView>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [pendingPos, setPendingPos] = useState<GeoPosition | null>(null); // por si llega pos antes del mapa
+  const [position, setPosition] = useState<GeoPosition | null>(null);
 
-  // Centro inicial: Lima, Perú
-  const initialRegion = {
-    latitude: -12.0464,
-    longitude: -77.0428,
+  const initialRegion: Region = {
+    latitude: -12.046374,
+    longitude: -77.042793,
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   };
 
-  const onMapPress = (e: MapPressEvent) => {
-    const { latitude, longitude } = e.nativeEvent.coordinate;
-    console.log('Tocaste en:', latitude, longitude);
+  const askPermission = async (): Promise<boolean> => {
+    const perm = Platform.OS === 'android'
+      ? PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
+      : PERMISSIONS.IOS.LOCATION_WHEN_IN_USE;
+
+    const res = await request(perm);
+    if (res === RESULTS.GRANTED || res === RESULTS.LIMITED) return true;
+
+    if (res === RESULTS.BLOCKED || res === RESULTS.DENIED) {
+      Alert.alert('Permiso de ubicación', 'Actívalo para ver tu ubicación.', [
+        { text: 'Abrir ajustes', onPress: () => openSettings() },
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
+    }
+    return false;
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const ok = await askPermission();
+        if (!mounted) return;
+        setHasPermission(ok);
+        if (!ok) return;
+
+        // Posición inicial
+        Geolocation.getCurrentPosition(
+          pos => {
+            if (!mounted) return;
+            setPosition(pos);
+            // Si el mapa aún no está listo, guardamos para animar luego
+            if (!mapReady) setPendingPos(pos);
+            else animateTo(pos);
+          },
+          err => {
+            console.warn('getCurrentPosition error', err);
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        );
+
+        // Watch
+        watchIdRef.current = Geolocation.watchPosition(
+          pos => {
+            if (!mounted) return;
+            setPosition(pos);
+          },
+          err => console.warn('watchPosition error', err),
+          { enableHighAccuracy: true, distanceFilter: 5, interval: 5000, fastestInterval: 2000 }
+        );
+      } catch (e) {
+        console.warn('init location failed', e);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+      if (watchIdRef.current != null) {
+        Geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      Geolocation.stopObserving();
+    };
+  }, [mapReady]); // cuando el mapa pasa a ready, podremos animar si teníamos pendingPos
+
+  const animateTo = (pos: GeoPosition) => {
+    try {
+      mapRef.current?.animateCamera(
+        { center: { latitude: pos.coords.latitude, longitude: pos.coords.longitude }, zoom: 16 },
+        { duration: 600 }
+      );
+    } catch (e) {
+      console.warn('animateCamera error', e);
+    }
+  };
+
+  const onMapReady = () => {
+    setMapReady(true);
+    // si llegó la posición antes, anímala ahora
+    if (pendingPos) {
+      animateTo(pendingPos);
+      setPendingPos(null);
+    }
+  };
+
+  const onRecenter = () => {
+    if (position && mapReady) animateTo(position);
+  };
+
+  const goBack = () => navigation.navigate('login');
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        provider={PROVIDER_GOOGLE}  // Fuerza Google Maps (iOS/Android)
-        initialRegion={initialRegion}
-        showsUserLocation
-        showsMyLocationButton
-        onPress={onMapPress}
-        customMapStyle={nightStyle} // Opcional: estilo bonito
-      >
-        {/* Marcador de ejemplo: Plaza Mayor de Lima */}
-        <Marker
-          coordinate={{ latitude: -12.046374, longitude: -77.042793 }}
-          title="Plaza Mayor de Lima"
-          description="Centro histórico"
-        />
-      </MapView>
+      {/* ⚠️ No renderizar el mapa hasta tener decisión de permiso */}
+      {hasPermission === true && (
+        <MapView
+          ref={mapRef}
+          provider={PROVIDER_GOOGLE}
+          style={StyleSheet.absoluteFillObject}
+          initialRegion={initialRegion}
+          customMapStyle={indriveMapStyle}
+          showsUserLocation   // opcional, si quieres el punto azul
+          onMapReady={onMapReady}
+        >
+          <Marker
+            coordinate={{ latitude: initialRegion.latitude, longitude: initialRegion.longitude }}
+            title="Punto inicial"
+            description="Ejemplo en Lima"
+          />
+        </MapView>
+      )}
+
+      <Pressable style={styles.fabPrimary} onPress={goBack}>
+        <Text style={styles.fabText}>Volver</Text>
+      </Pressable>
+
+      <Pressable style={styles.fabSecondary} onPress={onRecenter}>
+        <Text style={styles.fabText}>Centrar</Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1 },
+  fabPrimary: {
+    position: 'absolute', right: 16, bottom: 16,
+    paddingHorizontal: 16, paddingVertical: 12, borderRadius: 30,
+    backgroundColor: '#00C853', elevation: 6,
+  },
+  fabSecondary: {
+    position: 'absolute', right: 16, bottom: 72,
+    paddingHorizontal: 16, paddingVertical: 12, borderRadius: 30,
+    backgroundColor: '#333', elevation: 6,
+  },
+  fabText: { color: '#fff', fontWeight: '700' },
 });
-
-// Estilo oscuro opcional (puedes quitarlo si no lo quieres)
-const nightStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-  {
-    featureType: 'administrative.locality',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#d59563' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#d59563' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'geometry',
-    stylers: [{ color: '#263c3f' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#6b9a76' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry',
-    stylers: [{ color: '#38414e' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry.stroke',
-    stylers: [{ color: '#212a37' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#9ca5b3' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry',
-    stylers: [{ color: '#746855' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry.stroke',
-    stylers: [{ color: '#1f2835' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#f3d19c' }],
-  },
-  {
-    featureType: 'transit',
-    elementType: 'geometry',
-    stylers: [{ color: '#2f3948' }],
-  },
-  {
-    featureType: 'transit.station',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#d59563' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [{ color: '#17263c' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#515c6d' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text.stroke',
-    stylers: [{ color: '#17263c' }],
-  },
-];
