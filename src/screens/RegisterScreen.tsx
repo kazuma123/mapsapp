@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable,
   KeyboardAvoidingView, Platform, StatusBar, SafeAreaView,
-  ScrollView, TouchableOpacity, Alert
+  ScrollView, TouchableOpacity, Alert, ActivityIndicator
 } from 'react-native';
 import axios from 'axios';
 
@@ -52,8 +52,11 @@ export default function RegisterScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" />
-      <KeyboardAvoidingView behavior={Platform.select({ ios: 'padding', android: undefined })} style={{ flex: 1 }}>
+      <StatusBar barStyle="dark-content" />
+      <KeyboardAvoidingView
+        behavior={Platform.select({ ios: 'padding', android: undefined })}
+        style={{ flex: 1 }}
+      >
         <ScrollView
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
@@ -66,9 +69,10 @@ export default function RegisterScreen({ navigation }: any) {
             value={nombre}
             onChangeText={setNombre}
             placeholder="Nombre"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#9CA3AF"
             style={styles.input}
             autoCapitalize="words"
+            returnKeyType="next"
           />
 
           {/* Apellido */}
@@ -76,9 +80,10 @@ export default function RegisterScreen({ navigation }: any) {
             value={apellido}
             onChangeText={setApellido}
             placeholder="Apellido"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#9CA3AF"
             style={styles.input}
             autoCapitalize="words"
+            returnKeyType="next"
           />
 
           {/* DNI */}
@@ -86,9 +91,10 @@ export default function RegisterScreen({ navigation }: any) {
             value={dni}
             onChangeText={(t) => setDni(t.replace(/[^0-9]/g, '').slice(0, 8))}
             placeholder="DNI (8 dígitos)"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#9CA3AF"
             keyboardType="number-pad"
             style={styles.input}
+            returnKeyType="next"
           />
 
           {/* Email */}
@@ -96,12 +102,13 @@ export default function RegisterScreen({ navigation }: any) {
             value={email}
             onChangeText={setEmail}
             placeholder="Email"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#9CA3AF"
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
             textContentType="emailAddress"
             style={styles.input}
+            returnKeyType="next"
           />
 
           {/* Password */}
@@ -109,11 +116,12 @@ export default function RegisterScreen({ navigation }: any) {
             value={password}
             onChangeText={setPassword}
             placeholder="Contraseña (mín. 6)"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor="#9CA3AF"
             secureTextEntry
             autoComplete="password"
             textContentType="password"
             style={styles.input}
+            returnKeyType="done"
           />
 
           {/* Tipo */}
@@ -140,13 +148,15 @@ export default function RegisterScreen({ navigation }: any) {
           <Pressable
             style={({ pressed }) => [
               styles.primaryBtn,
-              pressed && { opacity: 0.85 },
-              (!canSubmit || loading) && { opacity: 0.5 },
+              pressed && { opacity: 0.9 },
+              (!canSubmit || loading) && { opacity: 0.6 },
             ]}
             onPress={onSubmit}
             disabled={!canSubmit || loading}
           >
-            <Text style={styles.primaryTxt}>{loading ? 'Creando…' : 'Crear cuenta'}</Text>
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.primaryTxt}>Crear cuenta</Text>}
           </Pressable>
 
           {/* Volver / Ya tengo cuenta */}
@@ -162,63 +172,84 @@ export default function RegisterScreen({ navigation }: any) {
   );
 }
 
+const GREEN = '#16A34A';
+const INK = '#111827';
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0F172A' },
+  safe: { flex: 1, backgroundColor: '#F9FAFB' }, // blanco suave
   container: {
     flexGrow: 1,
     paddingHorizontal: 28,
-    paddingTop: 40,
-    paddingBottom: 24,
-    alignItems: 'stretch',
+    paddingTop: 36,
+    paddingBottom: 28,
   },
 
   logo: {
-    fontSize: 36,
-    color: '#FFFFFF',
+    fontSize: 38,
+    color: GREEN,
     fontWeight: '900',
     textAlign: 'center',
   },
   subtitle: {
-    color: '#94A3B8',
-    fontSize: 15,
+    color: '#6B7280',
+    fontSize: 16,
     textAlign: 'center',
-    marginBottom: 24,
-    marginTop: 4,
+    marginBottom: 22,
+    marginTop: 6,
   },
 
   input: {
-    backgroundColor: '#1E293B',
-    color: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    color: INK,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#334155',
+    borderColor: '#D1D5DB',
     paddingVertical: 12,
     paddingHorizontal: 16,
     fontSize: 16,
     marginBottom: 14,
+
+    // sombra sutil
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
 
   segment: {
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: '#334155',
+    borderColor: '#D1D5DB',
     overflow: 'hidden',
-    marginTop: 6,
-    marginBottom: 6,
+    marginTop: 4,
+    marginBottom: 10,
+
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   segmentBtn: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  segmentActive: { backgroundColor: '#22C55E22' },
-  segmentTxt: { color: '#94A3B8', fontWeight: '800' },
-  segmentTxtActive: { color: '#22C55E' },
+  segmentActive: { backgroundColor: '#E6F9EF' },
+  segmentTxt: { color: '#6B7280', fontWeight: '800' },
+  segmentTxtActive: { color: GREEN },
 
   primaryBtn: {
-    backgroundColor: '#22C55E',
+    backgroundColor: GREEN,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 10,
+
+    shadowColor: GREEN,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   primaryTxt: { color: '#fff', fontSize: 17, fontWeight: '900', letterSpacing: 0.3 },
 
@@ -227,6 +258,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 18,
   },
-  footerHint: { color: '#94A3B8' },
-  footerLink: { color: '#22C55E', fontWeight: '800', marginLeft: 6 },
+  footerHint: { color: '#6B7280', fontSize: 15 },
+  footerLink: { color: GREEN, fontWeight: '800', marginLeft: 6 },
 });
