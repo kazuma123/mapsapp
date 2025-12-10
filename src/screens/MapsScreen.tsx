@@ -5,8 +5,8 @@ import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import Geolocation, { GeoPosition } from 'react-native-geolocation-service';
 import { PERMISSIONS, request, RESULTS } from 'react-native-permissions';
 import { fetchNearby, NearbyItem } from '../services/nearby';
-import { useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import io from "socket.io-client";
 
 interface User {
   id: number;
@@ -19,6 +19,7 @@ interface User {
 
 export default function MapsScreen({ navigation }: any) {
   const mapRef = useRef<MapView>(null);
+  const lastSentRef = useRef<number>(0);
   const [hasProfile, setHasProfile] = useState(false);
 
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -112,17 +113,47 @@ export default function MapsScreen({ navigation }: any) {
         if (canceled) return;
         setPosition(pos);
 
+        console.log(
+          '📍 GPS:',
+          pos.coords.latitude.toFixed(6),
+          pos.coords.longitude.toFixed(6),
+          'Vel:', pos.coords.speed,
+          'Acc:', pos.coords.accuracy
+        );
+
+        // ⭐ SOLO ENVIAR SI HAN PASADO 5 SEGUNDOS
+        const now = Date.now();
+        if (now - lastSentRef.current >= 5000) {
+          if (user?.id) {
+            socket.emit("enviarUbicacion", {
+              userId: user.id,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude
+            });
+          }
+
+          lastSentRef.current = now;
+          console.log("📡 Ubicación enviada al socket");
+        }
+
         if (!firstFixDoneRef.current && mapRef.current) {
           firstFixDoneRef.current = true;
           mapRef.current.animateCamera(
             {
-              center: { latitude: pos.coords.latitude, longitude: pos.coords.longitude },
+              center: {
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+              },
               zoom: 16,
             },
             { duration: 600 }
           );
-          // Carga inicial de cercanos en la primera fijación
-          loadNearbyByCenter(pos.coords.latitude, pos.coords.longitude, 5);
+
+          loadNearbyByCenter(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            5
+          );
         }
       },
       (err) => {
@@ -130,6 +161,9 @@ export default function MapsScreen({ navigation }: any) {
       },
       geoOpts
     );
+
+
+
 
     return () => {
       canceled = true;
@@ -140,6 +174,43 @@ export default function MapsScreen({ navigation }: any) {
       Geolocation.stopObserving();
     };
   }, [hasPermission, mapReady]);
+
+  useEffect(() => {
+    // Conectar cuando se monta la pantalla
+    socket.connect();
+
+    const handleConnect = () => {
+      console.log("🔌 Socket conectado:", socket.id);
+    };
+
+    const handleDisconnect = () => {
+      console.log("❌ Socket desconectado");
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    // Listeners de datos
+    const handleUbicacionActualizada = (data: any) => {
+      console.log("📡 Ubicación nueva recibida:", data);
+    };
+
+    const handleCercanosActualizados = (lista: any) => {
+      console.log("👥 Cercanos actualizados:", lista);
+    };
+
+    socket.on("ubicacionActualizada", handleUbicacionActualizada);
+    socket.on("cercanosActualizados", handleCercanosActualizados);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("ubicacionActualizada", handleUbicacionActualizada);
+      socket.off("cercanosActualizados", handleCercanosActualizados);
+      socket.disconnect(); // cerramos al salir de la pantalla
+    };
+  }, []);
+
 
   const onMapReady = () => setMapReady(true);
 
@@ -186,7 +257,10 @@ export default function MapsScreen({ navigation }: any) {
     loadNearbyByCenter(position.coords.latitude, position.coords.longitude, 5);
   };
 
-  const goBack = () => navigation.navigate('login');
+  const goBack = () => {
+    socket.disconnect();
+    navigation.navigate('login')
+  };
 
   useEffect(() => {
     return () => {
@@ -419,13 +493,6 @@ export default function MapsScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* MENÚ SUPERIOR */}
-      <View style={styles.topMenu}>
-        <TouchableOpacity onPress={toggleMenu} style={styles.menuBtn}>
-          <Text style={styles.menuBtnText}>☰</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* FORMULARIO DESPLEGABLE */}
       {menuOpen && (
         <View style={styles.dropdown}>
@@ -479,6 +546,12 @@ export default function MapsScreen({ navigation }: any) {
     </View>
   );
 }
+
+// Conexión global al socket
+const socket = io("https://geolocalizacion-backend-wtnq.onrender.com", {
+  transports: ["websocket"],
+  autoConnect: false, // lo manejamos manualmente
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
