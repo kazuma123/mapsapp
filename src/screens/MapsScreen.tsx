@@ -55,6 +55,7 @@ export default function MapsScreen({ navigation }: any) {
       try {
         const userString = await AsyncStorage.getItem('user');
         if (userString) {
+          console.log('Usuario cargado desde AsyncStorage:', JSON.parse(userString));
           setUser(JSON.parse(userString));
         }
       } catch (error) {
@@ -125,11 +126,22 @@ export default function MapsScreen({ navigation }: any) {
         const now = Date.now();
         if (now - lastSentRef.current >= 5000) {
           if (user?.id) {
-            socket.emit("enviarUbicacion", {
-              userId: user.id,
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude
-            });
+            // socket.emit("enviarUbicacion", {
+            //   userId: user.id,
+            //   lat: pos.coords.latitude,
+            //   lng: pos.coords.longitude
+            // });
+            socket.emit(
+              "buscarCercanosTiempoReal",
+              {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                radio: 5, // km
+              },
+              (resp: any) => {
+                console.log("👥 Cercanos RT:", resp);
+              }
+            );
           }
 
           lastSentRef.current = now;
