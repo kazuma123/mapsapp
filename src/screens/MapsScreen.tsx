@@ -7,7 +7,12 @@ import { PERMISSIONS, request, RESULTS } from 'react-native-permissions';
 import { fetchNearby, NearbyItem } from '../services/nearby';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import io from "socket.io-client";
+import axios from 'axios';
 
+interface Role {
+  id: number;
+  nombre: string;
+}
 interface User {
   id: number;
   nombre: string;
@@ -15,6 +20,7 @@ interface User {
   email: string;
   tipo: string;
   foto_url?: string;
+  roles: Role[];
 }
 
 export default function MapsScreen({ navigation }: any) {
@@ -47,6 +53,11 @@ export default function MapsScreen({ navigation }: any) {
     tituloProfesional: '',
     descripcionProfesional: '',
   });
+  const [publicacion, setPublicacion] = useState({
+    titulo: '',
+    descripcion: '',
+  });
+
   const [saving, setSaving] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
@@ -126,22 +137,29 @@ export default function MapsScreen({ navigation }: any) {
         const now = Date.now();
         if (now - lastSentRef.current >= 5000) {
           if (user?.id) {
-            // socket.emit("enviarUbicacion", {
-            //   userId: user.id,
-            //   lat: pos.coords.latitude,
-            //   lng: pos.coords.longitude
-            // });
-            socket.emit(
-              "buscarCercanosTiempoReal",
+            console.log("Enviando ubicación de user id:", user?.roles);
+            if (user?.roles[0]?.id === 1) {
               {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                radio: 5, // km
-              },
-              (resp: any) => {
-                console.log("👥 Cercanos RT:", resp);
+                socket.emit("enviarUbicacion", {
+                  userId: user.id,
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude
+                });
               }
-            );
+            }
+            if (user?.roles[0]?.id === 2) {
+              socket.emit(
+                "buscarCercanosTiempoReal",
+                {
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                  radio: 5, // km
+                },
+                (resp: any) => {
+                  console.log("👥 Cercanos RT:", resp);
+                }
+              );
+            }
           }
 
           lastSentRef.current = now;
@@ -438,6 +456,29 @@ export default function MapsScreen({ navigation }: any) {
     }
   };
 
+  const savePublicacion = async () => {
+    try {
+      setSaving(true);
+
+      await axios.post(
+        'https://geolocalizacion-backend-wtnq.onrender.com/publicacion',
+        {
+          titulo: publicacion.titulo,
+          descripcion: publicacion.descripcion,
+          usuarioId: user?.id,
+        },
+        { timeout: 15000 }
+      );
+
+      Alert.alert('Éxito', 'Publicación creada correctamente');
+      setHasProfile(true);
+    } catch (error: any) {
+      console.log(error?.response?.data || error.message);
+      Alert.alert('Error', 'No se pudo crear la publicación');
+    } finally {
+      setSaving(false);
+    }
+  };
 
 
   return (
@@ -508,6 +549,7 @@ export default function MapsScreen({ navigation }: any) {
       {/* FORMULARIO DESPLEGABLE */}
       {menuOpen && (
         <View style={styles.dropdown}>
+          {/* PERFIL PROFESIONAL */}
           <Text style={styles.dropdownTitle}>Perfil profesional</Text>
 
           <TextInput
@@ -537,15 +579,48 @@ export default function MapsScreen({ navigation }: any) {
             <Text style={styles.submitTxt}>
               {saving
                 ? hasProfile
-                  ? 'Actualizando...'
-                  : 'Guardando...'
+                  ? 'Actualizando perfil...'
+                  : 'Guardando perfil...'
                 : hasProfile
-                  ? 'Actualizar'
-                  : 'Guardar'}
+                  ? 'Actualizar perfil'
+                  : 'Guardar perfil'}
+            </Text>
+          </Pressable>
+
+          {/* PUBLICACIÓN */}
+          <Text style={styles.dropdownTitle}>Publicación</Text>
+
+          <TextInput
+            placeholder="Título"
+            style={styles.input}
+            value={publicacion.titulo}
+            onChangeText={(text) =>
+              setPublicacion((prev) => ({ ...prev, titulo: text }))
+            }
+          />
+
+          <TextInput
+            placeholder="Descripción"
+            style={styles.input}
+            multiline
+            value={publicacion.descripcion}
+            onChangeText={(text) =>
+              setPublicacion((prev) => ({ ...prev, descripcion: text }))
+            }
+          />
+
+          <Pressable
+            style={styles.submitBtn}
+            onPress={savePublicacion}
+            disabled={saving}
+          >
+            <Text style={styles.submitTxt}>
+              Actualizar publicación
             </Text>
           </Pressable>
         </View>
       )}
+
 
       {/* FABs */}
       <Pressable style={styles.fabPrimary} onPress={goBack}>

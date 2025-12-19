@@ -6,6 +6,7 @@ import {
   ScrollView, TouchableOpacity, Alert, ActivityIndicator
 } from 'react-native';
 import axios from 'axios';
+import { launchImageLibrary } from 'react-native-image-picker';
 
 export default function RegisterScreen({ navigation }: any) {
   const [nombre, setNombre] = useState('');
@@ -13,8 +14,10 @@ export default function RegisterScreen({ navigation }: any) {
   const [dni, setDni] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [tipo, setTipo] = useState<'trabajador' | 'cliente'>('trabajador');
+  const [rol, setRol] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(false);
+  const [descripcion, setDescripcion] = useState('');
+  const [foto, setFoto] = useState<any>(null);
 
   const canSubmit =
     nombre.trim().length > 0 &&
@@ -28,13 +31,42 @@ export default function RegisterScreen({ navigation }: any) {
       Alert.alert('Datos inválidos', 'Revisa los campos del formulario.');
       return;
     }
+
     try {
       setLoading(true);
+
+      const formData = new FormData();
+
+      // JSON en key "data"
+      formData.append(
+        'body',
+        JSON.stringify({
+          nombre,
+          apellido,
+          email,
+          descripcion,
+          dni,
+          password,
+          rolId: rol,
+        })
+      );
+
+      // archivo en key "foto"
+      if (foto) {
+        formData.append('foto', foto);
+      }
+
       await axios.post(
         'https://geolocalizacion-backend-wtnq.onrender.com/usuarios',
-        { nombre, apellido, dni, email, password, tipo },
-        { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 20000,
+        }
       );
+
       Alert.alert('Éxito', 'Cuenta creada correctamente.', [
         { text: 'OK', onPress: () => navigation.navigate('login') },
       ]);
@@ -49,6 +81,35 @@ export default function RegisterScreen({ navigation }: any) {
       setLoading(false);
     }
   };
+
+
+  const pickImage = () => {
+    launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.7,
+        selectionLimit: 1,
+      },
+      (response) => {
+        if (response.didCancel) return;
+
+        if (response.errorCode) {
+          Alert.alert('Error', 'No se pudo seleccionar la imagen');
+          return;
+        }
+
+        const asset = response.assets?.[0];
+        if (!asset?.uri) return;
+
+        setFoto({
+          uri: asset.uri,
+          name: asset.fileName || 'foto.jpg',
+          type: asset.type || 'image/jpeg',
+        });
+      }
+    );
+  };
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -124,25 +185,45 @@ export default function RegisterScreen({ navigation }: any) {
             returnKeyType="done"
           />
 
-          {/* Tipo */}
+          {/* Rol */}
           <View style={styles.segment}>
             <Pressable
-              onPress={() => setTipo('trabajador')}
-              style={[styles.segmentBtn, tipo === 'trabajador' && styles.segmentActive]}
+              onPress={() => setRol(1)}
+              style={[styles.segmentBtn, rol === 1 && styles.segmentActive]}
             >
-              <Text style={[styles.segmentTxt, tipo === 'trabajador' && styles.segmentTxtActive]}>
+              <Text style={[styles.segmentTxt, rol === 1 && styles.segmentTxtActive]}>
                 Trabajador
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => setTipo('cliente')}
-              style={[styles.segmentBtn, tipo === 'cliente' && styles.segmentActive]}
+              onPress={() => setRol(2)}
+              style={[styles.segmentBtn, rol === 2 && styles.segmentActive]}
             >
-              <Text style={[styles.segmentTxt, tipo === 'cliente' && styles.segmentTxtActive]}>
-                Cliente
+              <Text style={[styles.segmentTxt, rol === 2 && styles.segmentTxtActive]}>
+                Empresa
               </Text>
             </Pressable>
           </View>
+
+          {/* Descripción */}
+          <TextInput
+            value={descripcion}
+            onChangeText={setDescripcion}
+            placeholder="Descripción del servicio"
+            placeholderTextColor="#9CA3AF"
+            style={[styles.input, { height: 90 }]}
+            multiline
+          />
+
+          <Pressable
+            style={[styles.primaryBtn, { backgroundColor: '#4B5563' }]}
+            onPress={pickImage}
+          >
+            <Text style={styles.primaryTxt}>
+              {foto ? 'Foto seleccionada' : 'Seleccionar foto'}
+            </Text>
+          </Pressable>
+
 
           {/* Crear cuenta */}
           <Pressable
